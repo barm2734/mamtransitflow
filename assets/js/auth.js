@@ -1,43 +1,55 @@
 /* TransitFlow — session et garde de page
-   Auteur : Mamadou Barry */
+   Auteur : Mamadou Barry
 
-const SESSION_KEY = 'transitflow.session';
-const MOT_DE_PASSE_DEMO = 'demo';
-
-const COMPTES = [
-  { courriel: 'a.tremblay@transitflow.ca', role: 'admin', nom: 'Alex Tremblay', initiales: 'AT' },
-  { courriel: 'a.diallo@transitflow.ca', role: 'chauffeur', chauffeurId: 'c1' },
-  { courriel: 'm.traore@transitflow.ca', role: 'chauffeur', chauffeurId: 'c2' },
-  { courriel: 's.fortin@transitflow.ca', role: 'chauffeur', chauffeurId: 'c3' },
-  { courriel: 'm.barry@transitflow.ca', role: 'chauffeur', chauffeurId: 'c4' },
-  { courriel: 'Mamadou.Barry@USherbrooke.ca', role: 'admin', chauffeurId: 'c5', nom: 'Mamadou Barry', initiales: 'MB' }
-];
+   SESSION_KEY et API_BASE sont definis dans store.js (charge avant ce
+   fichier dans toutes les pages) : pas de redeclaration ici. */
 
 const Auth = {
   session() {
-    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); }
-    catch (e) { return null; }
+    return tfSession();
   },
 
-  connecter(courriel, motDePasse, role) {
-    const compte = COMPTES.find(function (c) {
-      return c.courriel.toLowerCase() === String(courriel).trim().toLowerCase();
-    });
-    if (!compte) return { ok: false, message: 'Aucun compte ne correspond a ce courriel.' };
-    if (motDePasse !== MOT_DE_PASSE_DEMO) return { ok: false, message: 'Mot de passe incorrect.' };
-    if (role && compte.role !== role) {
+  async connecter(courriel, motDePasse, role) {
+    let donnees;
+    try {
+      const reponse = await fetch(API_BASE + '/auth/connexion/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courriel: courriel, password: motDePasse })
+      });
+      donnees = await reponse.json().catch(function () { return null; });
+      if (!reponse.ok) {
+        return { ok: false, message: tfMessageErreur(donnees) };
+      }
+    } catch (e) {
+      return { ok: false, message: 'Impossible de joindre le serveur. Reessayez plus tard.' };
+    }
+
+    const moi = donnees.moi || {};
+
+    /* Le formulaire de connexion propose un role (admin / chauffeur) ; le
+       backend Django ne le valide pas lui-meme (contrairement au prototype
+       d'origine), donc la verification se fait ici, cote client. */
+    if (role && moi.role !== role) {
       return { ok: false, message: 'Ce compte n est pas un compte ' + role + '.' };
     }
-    const session = Object.assign({}, compte);
-    if (compte.role === 'chauffeur') {
-      const c = Store.chauffeur(compte.chauffeurId);
-      session.nom = Format.nomComplet(c);
-      session.initiales = Format.initiales(c);
-    }
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+
+    const session = {
+      access: donnees.access,
+      refresh: donnees.refresh,
+      courriel: moi.courriel,
+      role: moi.role,
+      nom: moi.nom,
+      initiales: moi.initiales,
+      chauffeurId: moi.chauffeur_id
+    };
+    tfSauvegarderSession(session);
     return { ok: true, session: session };
   },
 
+  /* Pas d'appel serveur : les jetons JWT sont sans etat (aucune app de
+     liste noire installee), la deconnexion se fait donc uniquement cote
+     client. */
   deconnecter(racine) {
     sessionStorage.removeItem(SESSION_KEY);
     window.location.href = (racine || '../') + 'index.html';

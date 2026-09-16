@@ -101,6 +101,10 @@ class VehiculeViewSet(viewsets.ModelViewSet):
 class TrajetViewSet(viewsets.ModelViewSet):
     queryset = Trajet.objects.select_related("chauffeur", "vehicule").prefetch_related("arrets")
     permission_classes = [IsAuthenticated, EstProprietaireOuAdmin]
+    # Les trajets sont adressés par leur code affiché (ex. "T-2093"), comme
+    # le front-end (t.id), plutôt que par la clé primaire interne.
+    lookup_field = "code"
+    lookup_value_regex = "[^/]+"
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -137,7 +141,7 @@ class TrajetViewSet(viewsets.ModelViewSet):
         return self.list(request)
 
     @action(detail=True, methods=["post"], url_path="ajouter-arret")
-    def ajouter_arret(self, request, pk=None):
+    def ajouter_arret(self, request, code=None):
         trajet = self.get_object()
         serializer = ArretSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -146,7 +150,7 @@ class TrajetViewSet(viewsets.ModelViewSet):
         return Response(TrajetSerializer(trajet).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
-    def terminer(self, request, pk=None):
+    def terminer(self, request, code=None):
         trajet = self.get_object()
         if trajet.statut == Trajet.Statut.TERMINE:
             raise ValidationError("Ce trajet est déjà terminé.")
@@ -160,6 +164,9 @@ class IncidentViewSet(viewsets.ModelViewSet):
     queryset = Incident.objects.select_related("chauffeur", "trajet")
     serializer_class = IncidentSerializer
     permission_classes = [IsAuthenticated, EstProprietaireOuAdmin]
+    # Même logique que TrajetViewSet : adressé par le code affiché (ex. "I-1001").
+    lookup_field = "code"
+    lookup_value_regex = "[^/]+"
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -184,7 +191,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
         serializer.save(chauffeur=chauffeur, statut=Incident.Statut.OUVERT)
 
     @action(detail=True, methods=["post"])
-    def traiter(self, request, pk=None):
+    def traiter(self, request, code=None):
         if not est_admin(request.user):
             raise PermissionDenied("Seul un administrateur peut marquer un incident comme traité.")
         incident = self.get_object()

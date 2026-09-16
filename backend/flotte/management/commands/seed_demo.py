@@ -17,30 +17,35 @@ from flotte.models import Arret, Chauffeur, Incident, Profil, Trajet, Vehicule
 User = get_user_model()
 MOT_DE_PASSE_DEMO = "demo"
 
+# Les plaques reprennent exactement celles codées en dur dans le <select>
+# de admin/chauffeur-nouveau.html (assets/js ne les charge pas dynamiquement
+# à cet endroit précis) : le formulaire de création de chauffeur échouerait
+# sinon, puisque plaque_habituelle doit correspondre à un Vehicule existant.
 COMPTES_CHAUFFEURS = [
     dict(courriel="a.diallo@transitflow.ca", prenom="Aissatou", nom="Diallo", age=34,
          telephone="514-555-0101", adresse="120 rue Sherbrooke, Montréal",
          permis_numero="D1234-560101-02", permis_expiration=date(2026, 10, 15),
-         statut=Chauffeur.Statut.EN_TRAJET, plaque="FLT-101"),
+         statut=Chauffeur.Statut.EN_TRAJET, plaque="QC-4821"),
     dict(courriel="m.traore@transitflow.ca", prenom="Moussa", nom="Traoré", age=41,
          telephone="514-555-0102", adresse="45 avenue du Parc, Montréal",
          permis_numero="T5678-410602-14", permis_expiration=date(2027, 3, 1),
-         statut=Chauffeur.Statut.DISPONIBLE, plaque="FLT-102"),
+         statut=Chauffeur.Statut.DISPONIBLE, plaque="QC-1094"),
     dict(courriel="s.fortin@transitflow.ca", prenom="Sophie", nom="Fortin", age=29,
          telephone="418-555-0103", adresse="8 rue Saint-Jean, Québec",
          permis_numero="F9012-290815-09", permis_expiration=date(2026, 11, 30),
-         statut=Chauffeur.Statut.DISPONIBLE, plaque="FLT-103"),
+         statut=Chauffeur.Statut.DISPONIBLE, plaque="QC-7733"),
     dict(courriel="m.barry@transitflow.ca", prenom="Mamadou", nom="Barry", age=27,
          telephone="819-555-0104", adresse="2500 boul. de l'Université, Sherbrooke",
          permis_numero="B3456-270210-21", permis_expiration=date(2026, 9, 20),
-         statut=Chauffeur.Statut.HORS_SERVICE, plaque="FLT-104"),
+         statut=Chauffeur.Statut.HORS_SERVICE, plaque="QC-2287"),
 ]
 
 VEHICULES = [
-    ("FLT-101", "Ford Transit 2023"),
-    ("FLT-102", "Mercedes Sprinter 2022"),
-    ("FLT-103", "Ford Transit 2024"),
-    ("FLT-104", "Nissan NV200 2021"),
+    ("QC-4821", "Ford Transit 2023"),
+    ("QC-1094", "Mercedes Sprinter 2022"),
+    ("QC-7733", "Ford Transit 2024"),
+    ("QC-2287", "Nissan NV200 2021"),
+    ("QC-5512", "Ford Transit 2022"),
 ]
 
 
@@ -116,7 +121,7 @@ class Command(BaseCommand):
                                       statut=Trajet.Statut.EN_COURS).exists():
             t1 = Trajet.objects.create(
                 chauffeur=chauffeurs["a.diallo@transitflow.ca"],
-                vehicule=vehicules["FLT-101"], plaque="FLT-101",
+                vehicule=vehicules["QC-4821"], plaque="QC-4821",
                 depart="Terminus Centre-Ville", depart_adresse="1000 rue de la Gauchetière, Montréal",
                 arrivee="Aéroport Trudeau", debut=dt(0, "08:15"), fin_prevue=dt(0, "09:30"),
                 statut=Trajet.Statut.EN_COURS,
@@ -125,8 +130,8 @@ class Command(BaseCommand):
 
         # Trajets terminés (historique) pour Moussa et Sophie
         for courriel, plaque, depart, arrivee, jour in [
-            ("m.traore@transitflow.ca", "FLT-102", "Dépôt Longueuil", "Vieux-Port", -1),
-            ("s.fortin@transitflow.ca", "FLT-103", "Université Laval", "Gare du Palais", -2),
+            ("m.traore@transitflow.ca", "QC-1094", "Dépôt Longueuil", "Vieux-Port", -1),
+            ("s.fortin@transitflow.ca", "QC-7733", "Université Laval", "Gare du Palais", -2),
         ]:
             t = Trajet.objects.create(
                 chauffeur=chauffeurs[courriel], vehicule=vehicules[plaque], plaque=plaque,

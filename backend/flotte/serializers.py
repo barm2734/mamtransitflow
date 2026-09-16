@@ -123,6 +123,12 @@ class ArretSerializer(serializers.ModelSerializer):
 
 class IncidentSerializer(serializers.ModelSerializer):
     chauffeur_nom = serializers.CharField(source="chauffeur.nom_complet", read_only=True)
+    # Le trajet associé est référencé par son code affiché (ex. "T-2093"),
+    # comme le fait le front-end (i.trajetId == t.id), plutôt que par la clé
+    # primaire interne — cohérent avec TrajetViewSet.lookup_field = "code".
+    trajet = serializers.SlugRelatedField(
+        slug_field="code", queryset=Trajet.objects.all(), required=False, allow_null=True
+    )
 
     class Meta:
         model = Incident
