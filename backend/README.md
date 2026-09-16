@@ -64,6 +64,29 @@ Toutes les routes ci-dessous nécessitent l'en-tête `Authorization: Bearer <acc
   l'admin) : chauffeurs actifs, trajets en cours/du jour, incidents
   ouverts/du jour, permis bientôt expirés.
 
+## Basculer vers PostgreSQL
+
+Par défaut le backend utilise SQLite. Pour passer sur une base PostgreSQL
+créée dans pgAdmin, renseigner ces variables dans `.env` (voir
+`.env.example`) :
+
+```
+POSTGRES_DB=transitflow
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=votre-mot-de-passe
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+```
+
+`config/settings.py` bascule automatiquement sur PostgreSQL dès que
+`POSTGRES_DB` est défini — rien d'autre à changer. Ensuite, comme pour
+SQLite :
+
+```bash
+python manage.py migrate
+python manage.py seed_demo
+```
+
 ## Notes de conception
 
 - Les rôles (`admin` / `chauffeur`) sont portés par le modèle `Profil`
@@ -76,5 +99,6 @@ Toutes les routes ci-dessous nécessitent l'en-tête `Authorization: Bearer <acc
 - Le prototype front-end référence des données de démonstration (`TF_SEED`)
   qui n'ont jamais été committées dans le dépôt — la commande `seed_demo`
   les recrée à partir des comptes visibles dans `assets/js/auth.js`.
-- Base de données : SQLite par défaut pour le développement ; à remplacer par
-  PostgreSQL en production (adapter `DATABASES` dans `config/settings.py`).
+- Base de données : SQLite par défaut pour le développement ; bascule sur
+  PostgreSQL automatiquement si `POSTGRES_DB` est défini (voir section
+  "Basculer vers PostgreSQL" ci-dessus).
