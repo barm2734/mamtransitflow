@@ -1,9 +1,10 @@
 # TransitFlow — Backend Django + API REST
 
 API du projet TransitFlow (gestion de flotte : chauffeurs, trajets, incidents),
-exposée en JSON via Django REST Framework, pensée pour être consommée par un
-front-end séparé (le prototype statique à la racine du dépôt, ou une future
-SPA).
+exposée en JSON via Django REST Framework. En développement (`DEBUG=True`),
+ce même serveur sert aussi le front-end statique à la racine du dépôt
+(`index.html`, `admin/`, `chauffeur/`, `assets/`) — un seul `runserver`
+suffit pour tout faire tourner.
 
 ## Installation
 
@@ -18,9 +19,19 @@ python manage.py seed_demo      # crée les comptes et données de démonstratio
 python manage.py runserver
 ```
 
-L'API est alors disponible sur `http://127.0.0.1:8000/api/` et
-l'administration Django sur `http://127.0.0.1:8000/admin/` (créer un compte
-avec `python manage.py createsuperuser`).
+Tout est alors sur `http://127.0.0.1:8000/` :
+- Le site (front-end) : `http://127.0.0.1:8000/` (page de connexion),
+  `http://127.0.0.1:8000/admin/…` et `http://127.0.0.1:8000/chauffeur/…`
+  pour les espaces admin et chauffeur.
+- L'API : `http://127.0.0.1:8000/api/…`.
+- L'admin Django (outillage interne, différent de l'espace admin du
+  front-end) : `http://127.0.0.1:8000/django-admin/` (créer un compte avec
+  `python manage.py createsuperuser`).
+
+Ce service conjoint (via `django.views.static.serve`) n'est actif que quand
+`DEBUG=True` — il ne fonctionne pas et ne doit pas être utilisé en
+production ; à ce moment-là, servir `index.html`/`assets/` avec un vrai
+serveur web (nginx, etc.) devant l'API Django.
 
 ## Comptes de démonstration (créés par `seed_demo`)
 

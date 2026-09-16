@@ -4,10 +4,15 @@
    Remplace l'ancienne persistance locale (localStorage + TF_SEED, jamais
    commite) par des appels reseau vers le backend Django (dossier backend/).
    La cle de session et l'URL de base sont definies ici car store.js est
-   toujours charge avant auth.js dans les pages HTML. */
+   toujours charge avant auth.js dans les pages HTML.
+
+   API_BASE est relatif ('/api') plutot qu'une URL absolue : Django sert
+   maintenant le front-end statique et l'API depuis le meme serveur (voir
+   backend/config/urls.py), donc les deux sont toujours sur la meme
+   origine, quel que soit l'hote ou le port utilise. */
 
 const SESSION_KEY = 'transitflow.session';
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = '/api';
 
 function tfSession() {
   try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); }
