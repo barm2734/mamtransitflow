@@ -1,109 +1,66 @@
-# TransitFlow
+# TransitFlow ERP
 
-Logiciel de gestion de flotte pour une entreprise de transport par navette
-(trajets interurbains) : chauffeurs, vehicules, trajets, arrets, incidents,
-et (a venir) suivi GPS en direct sur une carte.
+TransitFlow est un ERP multi-entreprise pour le transport de marchandises, voyageurs, navettes et activités spécialisées. La version SaaS utilise Django/DRF, PostgreSQL, Vue 3, une PWA et un canal temps réel ASGI/Redis.
 
-Backend : Django + Django REST Framework, organise en apps independantes
-(comme les modules d un ERP). Front-end (a venir : Vue.js) actuellement en
-HTML/CSS/JS, servi par ce meme serveur Django.
+## Architecture actuelle
 
-## Demarrage (developpement)
+- `backend/apps/erp` : organisations, adhésions, permissions, personnel, flotte, commandes, missions, GPS, clients/CRM, devis, facturation, règlements, comptabilité, atelier, stocks, documents, portail, messagerie et notifications.
+- `frontend/src` : application Vue/PWA, espace entreprise, Centre d’exploitation, espace chauffeur et portail client.
+- API `/api/v2/`, canal `/ws/activity`, santé `/api/sante`.
+- Django sert l’interface compilée. Les fichiers privés sont téléchargés par les routes autorisées, pas depuis un dossier public.
+- Chaque objet métier appartient à une organisation. Les API contrôlent l’adhésion active, le rôle et les applications activées ; les références interentreprises sont également contrôlées par PostgreSQL.
+- Montants en Decimal, séquences serveur, actions sensibles transactionnelles. Les modules historiques hors `apps/erp` restent présents pour compatibilité ; `TF_LEGACY_ENABLED=0` désactive leurs routes globales dans le SaaS.
 
-1. **Base de donnees** — rien a faire : une base SQLite locale est creee
-   automatiquement dans `backend/data/`. Pour travailler sur PostgreSQL
-   comme en production :
-   ```
-   docker compose up -d
-   cp .env.example .env
-   ```
-   (`.env` est lu automatiquement par Django.)
+## Développement
 
-2. **Dependances Python** (3.12) :
-   ```
-   pip install -r backend/requirements-dev.txt
-   ```
+Python 3.12, Node 22 et pnpm 11.25.0 sont les versions de recette CI. PostgreSQL et Redis sont nécessaires pour vérifier la concurrence et le temps réel comme en production. SQLite est utile localement mais ne prouve pas les verrous PostgreSQL.
 
-3. **Migrations** (cree les tables), depuis `backend/` :
-   ```
-   python manage.py migrate
-   ```
-
-4. **Donnees** — au choix :
-   - un jeu de demonstration complet (vehicules, chauffeurs, trajets,
-     incidents ; mot de passe `Transit-Demo-2026`) :
-     ```
-     python manage.py seed_demo
-     ```
-     Administrateur : `a.tremblay@transitflow.ca` ; chauffeurs :
-     `a.diallo@`, `m.traore@`, `s.fortin@`, `m.barry@transitflow.ca`.
-   - ou seulement un premier compte administrateur :
-     ```
-     python manage.py bootstrap admin@exemple.com "mot-de-passe-sur" "Prenom Nom"
-     ```
-
-5. **Lancer le serveur** :
-   ```
-   python manage.py runserver 5000
-   ```
-   Puis ouvrir http://127.0.0.1:5000/ — le front-end et l API sont servis
-   par le meme serveur. Le site d administration integre de Django est sur
-   http://127.0.0.1:5000/django-admin/ (pas `/admin/`, deja pris par les
-   pages HTML de l espace administrateur).
-
-## Tests
-
-Depuis `backend/` :
-```
-python -m pytest -q
-```
-Les memes tests tournent sur GitHub Actions a chaque push, sur PostgreSQL
-(`.github/workflows/tests.yml`).
-
-## Deploiement
-
-Sur Railway : voir [DEPLOIEMENT.md](DEPLOIEMENT.md).
-
-## API
-
-Toutes les routes sont sous `/api/` et, sauf connexion et sante, exigent
-l entete `Authorization: Bearer <jeton>`. Un administrateur (groupe
-`fleet.admin`) voit toutes les donnees ; un chauffeur (groupe
-`fleet.driver`) uniquement sa fiche, ses trajets et ses incidents.
-
-| Route | Role |
-|---|---|
-| `POST auth/connexion` | `{courriel, motDePasse, role}` → `{session, jeton, rafraichissement}` |
-| `POST auth/rafraichir` | `{rafraichissement}` → nouveau `jeton` |
-| `POST auth/deconnexion` | invalide le jeton de rafraichissement |
-| `GET auth/session` | session du jeton envoye |
-| `POST auth/comptes` | cree un compte de connexion (admin) |
-| `GET/POST chauffeurs` | liste (`?statut=`, `?recherche=`) / creation avec compte (admin) |
-| `GET/PATCH chauffeurs/<c1>` | fiche ; un chauffeur ne modifie que telephone et adresse |
-| `GET/POST vehicules` | flotte / ajout (admin) |
-| `GET/POST trajets` | liste (`?statut=`, `?chauffeurId=`) / demarrage (chauffeur, un seul en cours) |
-| `GET trajets/<T-1>` · `trajets/en-cours/<c1>` | detail / trajet en cours d un chauffeur |
-| `POST trajets/<T-1>/arrets` · `trajets/<T-1>/terminer` | ajout d arret / cloture (chauffeur ou admin) |
-| `GET/POST incidents` | liste (`?type=`, `?statut=`, `?chauffeurId=`) / signalement (chauffeur) |
-| `GET incidents/<I-1>` · `POST incidents/<I-1>/traiter` | detail / traitement (admin) |
-| `GET indicateurs` | indicateurs du tableau de bord (admin) |
-| `GET sante` | verification que le serveur repond |
-
-## Structure
-
-```
-backend/
-  manage.py
-  transitflow/    configuration du projet Django (settings, urls)
-  apps/           un dossier par module metier (comptes, drivers, fleet,
-                  dispatch, maintenance, reporting) — chacun a ses modeles,
-                  serializers et routes, independamment des autres ; les
-                  tests de chaque app vivent dans son propre dossier tests/
-admin/            pages de l espace administrateur
-chauffeur/        pages de l espace chauffeur
-assets/           CSS, JS et images du front-end
-railway.json      configuration du deploiement Railway
+```sh
+python -m venv .venv
+# Activer .venv selon le système.
+pip install -r requirements-dev.txt
+npm install --global pnpm@11.25.0
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend build
+python backend/manage.py migrate
+python backend/manage.py collectstatic --noinput
+python -m uvicorn transitflow.asgi:application --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
-Voir le plan de developpement pour la suite (suivi GPS en direct via
-Django Channels, migration du front-end vers Vue.js, etc.).
+Définir `DATABASE_URL`, `TF_REDIS_URL` et les variables locales décrites dans `.env.example`. Pour créer une entreprise vide et son propriétaire, ouvrir `/commencer`. Pour rejoindre une entreprise existante, accepter son invitation ; ne pas créer une seconde entreprise.
+
+## Tests et livraison
+
+```sh
+python backend/manage.py check
+python backend/manage.py makemigrations --check --dry-run
+cd backend
+python -m pytest apps/erp/tests -q
+cd ../frontend
+pnpm exec playwright install chromium webkit
+pnpm exec playwright test
+```
+
+Les tests navigateur nécessitent le serveur de recette, les données isolées et `TF_TEST_URL` si son URL diffère de `http://127.0.0.1:8000`. Ne pas lancer toute la suite sur des données clients réelles. Les tests de courriel simulent le transport.
+
+La CI générale et la recette ERP sont dans `.github/workflows`. La recette utilise PostgreSQL/Redis, deux workers ASGI et cinq profils navigateur, puis contrôle l’image de production et le stockage privé. Les résultats effectivement exécutés figurent dans les rapports ; un module existant n’est pas automatiquement un module validé.
+
+Railway déploie actuellement la branche `transitflow-tests` du dépôt `JonathanK-N/mamtransitflow`. `transitflow-erp` est la branche d’intégration. Le service utilise une base PostgreSQL persistante et un volume `/data` pour les fichiers privés. Vérifier la version déployée, les migrations, `/api/sante` et les logs après chaque livraison. La persistance d’un volume ne prouve pas qu’une sauvegarde restaurable est configurée.
+
+## Documentation
+
+- [Architecture et sécurité](docs/ARCHITECTURE_ERP.md)
+- [Installation, configuration et exploitation](docs/EXPLOITATION_ERP.md)
+- [Centre d’exploitation](docs/Centre-exploitation.md)
+- [CRM et flux commercial](docs/CRM-commercial.md)
+- [Transmission et réponse aux devis](docs/Devis-client.md)
+- [Pilotage Direction](docs/Direction.md)
+- [GPS et limites mobiles](docs/GPS.md)
+- [Portail et livraison](docs/PORTAIL_ET_LIVRAISON.md)
+- [Audit de production et vérifications restantes](docs/Audit-production.md)
+
+Les documents historiques de paie et les anciens portails ne décrivent pas les fonctionnalités garanties du SaaS actuel. La paie réglementaire, les déclarations fiscales et les intégrations financières externes nécessitent un périmètre et une validation spécifiques.
+
+- [Rapports et devise](docs/Rapports.md) : permissions, pagination, periodes et conservation des montants historiques.
+
+Les [documents financiers](docs/Documents-financiers.md) partagent leur aperçu et leur impression entre Facturation et le portail client.

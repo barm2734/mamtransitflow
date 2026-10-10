@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.comptes.permissions import DansGroupe, EstConnecte, est_admin, voit_tout
+from apps.societe.permissions import PortailAutorise
 from apps.dispatch.models import Trajet
 from apps.drivers.models import Chauffeur
 from .models import Incident
@@ -25,11 +26,12 @@ from .serializers import IncidentEntreeSerializer, IncidentSerializer
 
 class IncidentsView(APIView):
     def get_permissions(self):
-        classe = EstConnecte if self.request.method == 'GET' else DansGroupe('fleet.driver')
-        return [classe()]
+        if self.request.method == 'GET':
+            return [EstConnecte()]
+        return [DansGroupe('fleet.driver')(), PortailAutorise('incidents')()]
 
     def get(self, request):
-        incidents = Incident.objects.select_related('trajet', 'chauffeur')
+        incidents = Incident.objects.select_related('trajet', 'chauffeur', 'bon_travail')
         if not est_admin(request.user):
             incidents = incidents.filter(chauffeur_id=request.user.chauffeur_id)
         type_ = request.query_params.get('type')

@@ -2,7 +2,7 @@
    Auteur : Mamadou Barry
    Modifie par : Jonathan K-N — les dates et durees se calculent a partir
    de l heure reelle du navigateur (et non plus d un "aujourd hui" fige au
-   12 septembre 2026). */
+   12 septembre 2026) ; libelles de la flotte et de l entretien. */
 
 const MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
   'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
@@ -126,6 +126,133 @@ const Format = {
     return type === 'technique'
       ? { texte: 'Technique', classe: 'type-tech' }
       : { texte: 'Route', classe: '' };
+  },
+
+  /* ---- Flotte et entretien ---- */
+
+  /* 48210 -> "48 210 km" */
+  km(valeur) {
+    if (valeur === null || valeur === undefined || valeur === '') return '—';
+    return Number(valeur).toLocaleString('fr-CA') + ' km';
+  },
+
+  /* 1234.5 -> "1 234,50 $" */
+  montant(valeur) {
+    return Number(valeur || 0).toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
+  },
+
+  statutVehicule(statut) {
+    const table = {
+      'actif': { texte: 'Actif', classe: 'ok' },
+      'maintenance': { texte: 'En maintenance', classe: 'warn' },
+      'hors-service': { texte: 'Hors service', classe: '' }
+    };
+    return table[statut] || { texte: statut, classe: '' };
+  },
+
+  statutBon(statut) {
+    const table = {
+      'planifie': { texte: 'Planifie', classe: '' },
+      'en-cours': { texte: 'En cours', classe: 'warn' },
+      'termine': { texte: 'Termine', classe: 'ok' },
+      'annule': { texte: 'Annule', classe: 'muted' }
+    };
+    return table[statut] || { texte: statut, classe: '' };
+  },
+
+  prioriteBon(priorite) {
+    const table = {
+      'basse': { texte: 'Basse', classe: '' },
+      'normale': { texte: 'Normale', classe: '' },
+      'haute': { texte: 'Haute', classe: 'warn' },
+      'urgente': { texte: 'Urgente', classe: 'danger' }
+    };
+    return table[priorite] || { texte: priorite, classe: '' };
+  },
+
+  /* Meme liste que TYPES_ENTRETIEN dans backend/apps/entretien/models.py. */
+  TYPES_ENTRETIEN: [
+    ['vidange', 'Vidange et filtres'], ['pneus', 'Pneus'], ['freins', 'Freins'],
+    ['inspection', 'Inspection mecanique'], ['courroie', 'Courroie de distribution'],
+    ['climatisation', 'Climatisation'], ['carrosserie', 'Carrosserie'],
+    ['electrique', 'Systeme electrique'], ['reparation', 'Reparation mecanique'], ['autre', 'Autre']
+  ],
+
+  typeEntretien(type) {
+    const trouve = this.TYPES_ENTRETIEN.find(function (t) { return t[0] === type; });
+    return trouve ? trouve[1] : type;
+  },
+
+  /* <option> de chaque type d entretien (pour les listes deroulantes). */
+  optionsTypesEntretien(selection) {
+    return this.TYPES_ENTRETIEN.map(function (t) {
+      return '<option value="' + t[0] + '"' + (t[0] === selection ? ' selected' : '') + '>' + t[1] + '</option>';
+    }).join('');
+  },
+
+  etatEcheance(etat) {
+    const table = {
+      'en-retard': { texte: 'En retard', classe: 'danger' },
+      'bientot': { texte: 'Bientot', classe: 'warn' },
+      'a-jour': { texte: 'A jour', classe: 'ok' }
+    };
+    return table[etat] || { texte: etat, classe: '' };
+  },
+
+  /* "tous les 8 000 km ou 180 jours" */
+  intervalle(plan) {
+    const morceaux = [];
+    if (plan.intervalleKm) morceaux.push(this.km(plan.intervalleKm));
+    if (plan.intervalleJours) morceaux.push(plan.intervalleJours + ' jours');
+    return 'tous les ' + morceaux.join(' ou ');
+  },
+
+  /* Ce qui reste avant l echeance : "600 km restants · 30 j restants" / "depasse de 200 km · 180 j restants". */
+  resteEcheance(echeance) {
+    const morceaux = [];
+    if (echeance.kmRestants !== null && echeance.kmRestants !== undefined) {
+      morceaux.push(echeance.kmRestants > 0
+        ? Number(echeance.kmRestants).toLocaleString('fr-CA') + ' km restants'
+        : 'depasse de ' + Number(-echeance.kmRestants).toLocaleString('fr-CA') + ' km');
+    }
+    if (echeance.joursRestants !== null && echeance.joursRestants !== undefined) {
+      morceaux.push(echeance.joursRestants > 0
+        ? echeance.joursRestants + ' j restants'
+        : (echeance.joursRestants === 0 ? 'aujourd hui' : 'depasse de ' + (-echeance.joursRestants) + ' j'));
+    }
+    return morceaux.join(' · ') || '—';
+  },
+
+  /* ---- Suivi GPS ---- */
+
+  /* 12 -> "il y a 12 s", 190 -> "il y a 3 min", 7300 -> "il y a 2 h" */
+  depuis(secondes) {
+    if (secondes === null || secondes === undefined) return 'jamais';
+    if (secondes < 5) return 'a l instant';
+    if (secondes < 60) return 'il y a ' + Math.round(secondes) + ' s';
+    if (secondes < 3600) return 'il y a ' + Math.floor(secondes / 60) + ' min';
+    return 'il y a ' + Math.floor(secondes / 3600) + ' h';
+  },
+
+  /* 12430 -> "12,4 km", 830 -> "830 m" */
+  distance(metres) {
+    if (metres === null || metres === undefined) return '—';
+    if (metres < 1000) return Math.round(metres) + ' m';
+    return (metres / 1000).toLocaleString('fr-CA', { maximumFractionDigits: 1 }) + ' km';
+  },
+
+  vitesse(kmh) {
+    return (kmh === null || kmh === undefined) ? '—' : Math.round(kmh) + ' km/h';
+  },
+
+  liaison(etat) {
+    const table = {
+      'en-ligne': { texte: 'En ligne', classe: 'ok' },
+      'intermittent': { texte: 'Signal faible', classe: 'warn' },
+      'perdue': { texte: 'Signal perdu', classe: '' },
+      'aucune': { texte: 'Aucune position', classe: '' }
+    };
+    return table[etat] || { texte: etat, classe: '' };
   },
 
   echapper(valeur) {

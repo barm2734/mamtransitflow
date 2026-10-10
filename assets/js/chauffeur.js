@@ -3,7 +3,8 @@
    Modifie par : Jonathan K-N — meme principe que admin.js : chaque
    methode "pageXxx" est en async/await parce que les donnees viennent de
    l API (voir store.js). Les dates sont celles du jour reel et les
-   erreurs du serveur sont affichees a l utilisateur (tfNotifier). */
+   erreurs du serveur sont affichees a l utilisateur (tfNotifier). A
+   l arrivee, le chauffeur peut saisir le compteur du vehicule. */
 
 const Chauffeur = {
   /*
@@ -17,6 +18,15 @@ const Chauffeur = {
     if (!session) return;
     monterBarreUtilisateur(session, '../');
     this.session = session;
+    // Fonction fermee dans le portail : la navigation a remplace la page par un message.
+    try { this.entreprise = await window.tfNavigationPrete; } catch (e) { return; }
+    // Boutons vers des fonctions que l administrateur n a pas ouvertes dans le portail.
+    const portail = (this.entreprise || {}).portail || {};
+    [['trajet-nouveau.html', 'trajets'], ['incident-nouveau.html', 'incidents']].forEach(function (x) {
+      if (portail[x[1]] === false) {
+        document.querySelectorAll('a[href^="' + x[0] + '"]').forEach(function (a) { a.classList.add('tf-hidden'); });
+      }
+    });
     this.moi = await Store.chauffeur(session.chauffeurId);
     if (!this.moi) {
       document.querySelector('main').innerHTML =
@@ -29,6 +39,62 @@ const Chauffeur = {
       return c.toUpperCase();
     });
     if (typeof this[methode] === 'function') await this[methode]();
+    document.body.dataset.pret = '1';
+  },
+
+  /*
+   * Fenetre "Marquer l arrivee" : le compteur du vehicule est demande (facultatif)
+   * pour alimenter le suivi d entretien de la flotte. Renvoie true si le trajet est termine.
+   */
+  async marquerArrivee(trajet) {
+    const vehicules = await Store.vehicules();
+    const vehicule = vehicules.find(function (v) { return v.plaque === trajet.plaque; });
+    const actuel = vehicule ? vehicule.kilometrage : 0;
+    // Les derniers points GPS partent avant la cloture (le serveur les refuse ensuite).
+    const suivi = Chauffeur.suivi || (typeof SuiviGPS === 'function' ? new SuiviGPS(trajet.id) : null);
+    return tfModale({
+      titre: 'Marquer l arrivee',
+      sousTitre: trajet.depart + ' → ' + trajet.arrivee + ' · ' + trajet.plaque,
+      corps: tfChamp('Compteur du vehicule (km)',
+        '<input class="tf-input tf-mono" name="kilometrage" type="number" inputmode="numeric" min="' + actuel +
+        '" step="1" placeholder="' + actuel + '">',
+        'Facultatif — dernier releve : ' + Format.km(actuel) + '. Sert au suivi de l entretien.'),
+      valider: 'Terminer le trajet',
+      danger: true,
+      async action(d) {
+        if (suivi) await suivi.arreter();
+        await Store.terminerTrajet(trajet.id, tfNombre(d, 'kilometrage'));
+      }
+    });
+  },
+
+  /* Partage de la position pendant le trajet (voir gps.js) et affichage de son etat. */
+  partagerPosition(trajet) {
+    const pastille = document.querySelector('[data-gps-statut]');
+    const detail = document.querySelector('[data-gps-detail]');
+    const relancer = document.querySelector('[data-gps-relancer]');
+    const libelles = {
+      actif: ['Actif', 'ok'], attente: ['Recherche', 'warn'], refuse: ['Refuse', 'danger'],
+      indisponible: ['Indisponible', 'danger'], arrete: ['Arrete', '']
+    };
+    function afficher(etat) {
+      const l = libelles[etat.statut] || [etat.statut, ''];
+      pastille.className = 'tf-pill ms-auto ' + l[1];
+      pastille.textContent = l[0];
+      const morceaux = [];
+      if (etat.message) morceaux.push(etat.message);
+      if (etat.statut === 'actif' && etat.precision) morceaux.push('Precision ' + Math.round(etat.precision) + ' m');
+      if (etat.dernierEnvoi) morceaux.push('envoye ' + Format.depuis((Date.now() - etat.dernierEnvoi) / 1000));
+      if (etat.enAttente > 0) morceaux.push(etat.enAttente + ' point(s) en attente');
+      detail.textContent = morceaux.join(' · ') || 'Demarrage...';
+      relancer.classList.toggle('tf-hidden', etat.statut !== 'refuse');
+    }
+    this.suivi = new SuiviGPS(trajet.id, { rappel: afficher });
+    const suivi = this.suivi;
+    relancer.addEventListener('click', function () { suivi.arreter().then(function () { suivi.demarrer(); }); });
+    // Rafraichit "envoye il y a ..." meme sans nouvelle position.
+    setInterval(function () { afficher(suivi.etat); }, 5000);
+    suivi.demarrer();
   },
 
   /* Mes trajets */
@@ -62,8 +128,7 @@ const Chauffeur = {
         'incident-nouveau.html?trajet=' + encodeURIComponent(enCours.id);
       bloc.querySelector('[data-terminer]').addEventListener('click', async function () {
         try {
-          await Store.terminerTrajet(enCours.id);
-          window.location.reload();
+          if (await Chauffeur.marquerArrivee(enCours)) window.location.reload();
         } catch (e) { tfNotifier(e.message); }
       });
     } else {
@@ -98,20 +163,25 @@ const Chauffeur = {
     formulaire.querySelector('[name=heurePrevue]').value = Format.heureActuelle(60);
 
     const [vehicules, enCours] = await Promise.all([Store.vehicules(), Store.trajetEnCours(moi.id)]);
-    let plaque = vehicules.some(function (v) { return v.plaque === moi.plaqueHabituelle; })
+    // Seuls les vehicules 'actif' peuvent partir : ceux en maintenance ou
+    // hors service sont affiches mais grises (le serveur les refuse aussi).
+    const disponibles = vehicules.filter(function (v) { return v.disponible; });
+    let plaque = disponibles.some(function (v) { return v.plaque === moi.plaqueHabituelle; })
       ? moi.plaqueHabituelle
-      : (vehicules[0] ? vehicules[0].plaque : null);
+      : (disponibles[0] ? disponibles[0].plaque : null);
 
     tuiles.innerHTML = vehicules.map(function (v) {
       return '<div class="col-6 col-md-4"><button type="button" class="tf-tile' +
-        (v.plaque === plaque ? ' active' : '') + '" data-plaque="' + Format.echapper(v.plaque) + '">' +
+        (v.plaque === plaque ? ' active' : '') + '" data-plaque="' + Format.echapper(v.plaque) + '"' +
+        (v.disponible ? '' : ' disabled style="opacity:.55;cursor:not-allowed"') + '>' +
         '<span class="tf-tile-mark"></span>' +
         '<span class="tf-mono" style="font-size:14px">' + Format.echapper(v.plaque) + '</span>' +
-        '<span class="tf-tile-note">' + Format.echapper(v.modele) + '</span></button></div>';
+        '<span class="tf-tile-note">' + Format.echapper(v.modele) +
+        (v.disponible ? '' : ' · ' + Format.statutVehicule(v.statut).texte.toLowerCase()) + '</span></button></div>';
     }).join('') || '<div class="col-12 tf-muted">Aucun vehicule dans la flotte : ' +
       'demandez a votre administrateur d en ajouter un.</div>';
 
-    tuiles.querySelectorAll('[data-plaque]').forEach(function (b) {
+    tuiles.querySelectorAll('[data-plaque]:not([disabled])').forEach(function (b) {
       b.addEventListener('click', function () {
         tuiles.querySelectorAll('[data-plaque]').forEach(function (x) { x.classList.remove('active'); });
         b.classList.add('active');
@@ -157,6 +227,8 @@ const Chauffeur = {
     }
     const formulaireArret = document.querySelector('[data-arret]');
     formulaireArret.querySelector('[name=heure]').value = Format.heureActuelle();
+    if (t.statut === 'en-cours') this.partagerPosition(t);
+    else document.querySelector('[data-gps]').classList.add('tf-hidden');
 
     // Redessine le fil du trajet (appelee au chargement et apres l ajout
     // d un arret). On relit le trajet depuis l API a chaque fois pour
@@ -212,8 +284,7 @@ const Chauffeur = {
 
     document.querySelector('[data-terminer]').addEventListener('click', async function () {
       try {
-        await Store.terminerTrajet(t.id);
-        window.location.href = 'mes-trajets.html';
+        if (await Chauffeur.marquerArrivee(t)) window.location.href = 'mes-trajets.html';
       } catch (e) { tfNotifier(e.message); }
     });
 
@@ -267,6 +338,7 @@ const Chauffeur = {
 // est affichee a l utilisateur plutot que de disparaitre dans la console.
 document.addEventListener('DOMContentLoaded', function () {
   Chauffeur.demarrer().catch(function (e) {
+    if (e && e.message === 'page-fermee') return;
     console.error('TransitFlow chauffeur :', e);
     tfNotifier(e.message);
   });

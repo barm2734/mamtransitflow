@@ -73,7 +73,17 @@ publique et se connecter avec `TF_ADMIN_COURRIEL` / `TF_ADMIN_MOT_DE_PASSE`
   genere et affiche **une seule fois**, a transmettre au chauffeur.
 - **Mot de passe administrateur** : `TF_ADMIN_MOT_DE_PASSE` ne sert qu a la
   creation du compte ; le changer ensuite dans `/django-admin/` n est pas
-  ecrase par les deploiements suivants.
+  ecrase par les deploiements suivants. Le journal de demarrage indique
+  toujours le compte concerne (`Compte administrateur cree : ...` ou
+  `le compte ... existe deja`) : verifier son orthographe en cas d echec
+  de connexion.
+- **Connexion administrateur impossible** (mot de passe perdu, ou
+  `TF_ADMIN_MOT_DE_PASSE` modifie apres la creation du compte) : ajouter
+  `TF_ADMIN_REINITIALISER=1` aux variables du service et redeployer. Le
+  compte `TF_ADMIN_COURRIEL` reprend le mot de passe `TF_ADMIN_MOT_DE_PASSE`
+  et est reactive (le journal affiche `Compte administrateur ... reinitialise`).
+  **Retirer ensuite la variable.** Les espaces en debut et fin de ces
+  variables sont ignores.
 - **Donnees de demonstration** (environnement de test uniquement) :
   ```
   railway run python backend/manage.py seed_demo --force
@@ -88,9 +98,26 @@ publique et se connecter avec `TF_ADMIN_COURRIEL` / `TF_ADMIN_MOT_DE_PASSE`
 | `TF_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Domaines supplementaires (ex. domaine personnalise) |
 | `TF_CSRF_TRUSTED_ORIGINS` | — | Origines HTTPS supplementaires pour `/django-admin/` |
 | `TF_JETON_MINUTES` | `60` | Duree du jeton d acces (le jeton de rafraichissement dure 7 jours) |
+| `TF_GPS_RETENTION_JOURS` | `90` | Duree de conservation des positions GPS des trajets termines |
+| `TF_GPS_LIMITE` | `30/min` | Nombre maximal d envois de positions par chauffeur |
 | `TF_HSTS_SECONDS` | `3600` | Duree HSTS ; augmenter (ex. `31536000`) une fois le domaine stable |
 | `WEB_CONCURRENCY` | `2` | Nombre de processus gunicorn |
 | `TF_LOG_LEVEL` | `INFO` | Niveau des journaux |
+
+### Envoi des courriels (invitations, mot de passe oublie)
+
+Sans configuration, aucun courriel ne part : a la creation d un chauffeur,
+l interface affiche le lien d invitation a lui transmettre. Pour l envoi
+automatique, au choix :
+
+| Variable | Exemple | Effet |
+|---|---|---|
+| `TF_RESEND_CLE` | `re_...` | Envoi par l API Resend (HTTPS) : recommande sur Railway, qui bloque souvent le port SMTP |
+| `TF_EMAIL_HOST` | `smtp.office365.com` | Envoi SMTP (avec `TF_EMAIL_PORT` 587, `TF_EMAIL_UTILISATEUR`, `TF_EMAIL_MOT_DE_PASSE`, `TF_EMAIL_TLS` 1) |
+| `TF_EMAIL_EXPEDITEUR` | `Navettes Estrie <noreply@exemple.ca>` | Adresse d envoi (domaine verifie chez le fournisseur) |
+| `TF_INVITATION_JOURS` | `7` | Validite des liens d invitation et de reinitialisation |
+
+L etat de la configuration est visible dans Parametres > Courriel.
 
 ## Domaine personnalise
 

@@ -23,6 +23,7 @@ Genere par `django-admin startproject`, puis adapte pour TransitFlow :
 
 import os
 import sys
+from .static_headers import pwa_headers
 from datetime import timedelta
 from pathlib import Path
 
@@ -111,11 +112,17 @@ INSTALLED_APPS = [
     'apps.fleet',
     'apps.dispatch',
     'apps.maintenance',
+    'apps.entretien',
+    'apps.suivi',
     'apps.reporting',
+    'apps.societe',
+    'apps.paie',
+    'apps.erp',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'apps.erp.middleware.SecurityHeaders',
     # Sert les fichiers statiques de l admin Django (collectstatic) en production.
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -164,7 +171,7 @@ if _url_bd:
     # Accepte aussi la forme SQLAlchemy 'postgresql+psycopg://' des anciennes
     # versions du fichier .env.example.
     _url_bd = _url_bd.replace('postgresql+psycopg://', 'postgresql://', 1)
-    DATABASES = {'default': dj_database_url.parse(_url_bd, conn_max_age=600, conn_health_checks=True)}
+    DATABASES = {'default': dj_database_url.parse(_url_bd, conn_max_age=0, conn_health_checks=True)}
 else:
     _dossier_sqlite = BASE_DIR / 'data'
     _dossier_sqlite.mkdir(exist_ok=True)
@@ -195,9 +202,13 @@ AUTH_PASSWORD_VALIDATORS = [
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication'],
     'DEFAULT_PERMISSION_CLASSES': ['apps.comptes.permissions.EstConnecte'],
+    # Envoi des positions GPS (apps/suivi) : un telephone envoie un lot
+    # toutes les ~10 s ; au-dela de cette limite, la requete repond 429.
+    'DEFAULT_THROTTLE_RATES': {'positions': os.environ.get('TF_GPS_LIMITE', '30/min')},
 }
 
 SIMPLE_JWT = {
+    'CHECK_REVOKE_TOKEN': True,
     # Jeton d acces court + jeton de rafraichissement plus long : le
     # front-end (assets/js/store.js) redemande un jeton d acces de facon
     # transparente quand il expire. A la deconnexion, le jeton de
@@ -224,6 +235,50 @@ STORAGES = {
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+ASGI_APPLICATION = 'transitflow.asgi.application'
+TF_REDIS_URL = os.environ.get('TF_REDIS_URL', '')
+CHANNEL_LAYERS = {'default': {'BACKEND': 'channels_redis.core.RedisChannelLayer',
+    'CONFIG': {'hosts': [{'address':TF_REDIS_URL,'socket_connect_timeout':2,'socket_timeout':10}], 'expiry': 60, 'group_expiry': 300, 'capacity': 200}}} if TF_REDIS_URL else {
+    'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}} if DEBUG else {}
+TF_VAPID_PUBLIC_KEY = os.environ.get('TF_VAPID_PUBLIC_KEY', '')
+TF_VAPID_PRIVATE_KEY = os.environ.get('TF_VAPID_PRIVATE_KEY', '')
+TF_VAPID_SUBJECT = os.environ.get('TF_VAPID_SUBJECT', 'mailto:contact@mjtransitflow.com')
+
+# Auteur : Jonathan Kakesa (JonathanK-N). Isolation des routes historiques.
+TF_LEGACY_ENABLED = os.environ.get('TF_LEGACY_ENABLED', '0') == '1'
+PASSWORD_RESET_TIMEOUT = 3600
+MEDIA_ROOT = Path(os.environ.get('TF_PRIVATE_STORAGE', str(BASE_DIR / 'privatefiles')))
+WHITENOISE_ROOT = None if TF_LEGACY_ENABLED else RACINE_PROJET / 'frontend' / 'dist'
+WHITENOISE_MIMETYPES = {'.webmanifest': 'application/manifest+json'}
+WHITENOISE_ADD_HEADERS_FUNCTION = pwa_headers
+DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+
+# ---- Courriels (invitations, reinitialisation de mot de passe) -----------
+# Deux facons d envoyer, au choix :
+# - SMTP : TF_EMAIL_HOST (+ TF_EMAIL_PORT, TF_EMAIL_UTILISATEUR,
+#   TF_EMAIL_MOT_DE_PASSE, TF_EMAIL_TLS=1) ;
+# - Resend (API HTTPS, utile quand l hebergeur bloque le port SMTP) :
+#   TF_RESEND_CLE.
+# TF_EMAIL_EXPEDITEUR : adresse d envoi (ex. "TransitFlow <noreply@exemple.ca>").
+# Sans configuration, rien n est envoye : l administrateur copie le lien
+# d invitation affiche dans l interface et le transmet lui-meme.
+TF_EMAIL_EXPEDITEUR = os.environ.get('TF_EMAIL_EXPEDITEUR', 'TransitFlow <noreply@transitflow.local>')
+TF_RESEND_CLE = os.environ.get('TF_RESEND_CLE', '')
+DEFAULT_FROM_EMAIL = TF_EMAIL_EXPEDITEUR
+if os.environ.get('TF_EMAIL_HOST'):
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = os.environ['TF_EMAIL_HOST']
+    EMAIL_PORT = int(os.environ.get('TF_EMAIL_PORT', '587'))
+    EMAIL_HOST_USER = os.environ.get('TF_EMAIL_UTILISATEUR', '')
+    EMAIL_HOST_PASSWORD = os.environ.get('TF_EMAIL_MOT_DE_PASSE', '')
+    EMAIL_USE_TLS = os.environ.get('TF_EMAIL_TLS', '1') == '1'
+    EMAIL_TIMEOUT = 15
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+TF_COURRIEL_CONFIGURE = bool(os.environ.get('TF_EMAIL_HOST') or TF_RESEND_CLE)
+# Duree de validite d un lien d invitation ou de reinitialisation.
+TF_INVITATION_JOURS = int(os.environ.get('TF_INVITATION_JOURS', '7'))
 
 # ---- Production (TF_DEBUG=0) ---------------------------------------------
 if not DEBUG:
