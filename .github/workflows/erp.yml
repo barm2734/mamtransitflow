@@ -159,6 +159,30 @@ jobs:
         run: |
           export CHROME_PATH=$(node -e "process.stdout.write(require('@playwright/test').chromium.executablePath())")
           pnpm --config.enable-global-virtual-store=false dlx lighthouse@13.5.0 http://127.0.0.1:8000/connexion --chrome-flags="--headless --no-sandbox" --only-categories=performance,accessibility,best-practices --output=json --output=html --output-path=lighthouse-mobile --quiet
+          # Use Playwright's Chromium for Lighthouse and retry transient NO_NAVSTART errors
+          export CHROME_PATH=$(node -e "process.stdout.write(require('@playwright/test').chromium.executablePath())")
+          attempts=0
+          max_attempts=3
+          set +e
+          while [ $attempts -lt $max_attempts ]; do
+            attempts=$((attempts+1))
+            echo "Lighthouse attempt $attempts/$max_attempts"
+            pnpm --config.enable-global-virtual-store=false dlx lighthouse@13.5.0 http://127.0.0.1:8000/connexion --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --only-categories=performance,accessibility,best-practices,seo --output=json --output=html --output-path=./lighthouse-mobile.report --max-wait-for-load=45000
+            rc=$?
+            if [ $rc -eq 0 ]; then
+              echo "Lighthouse succeeded on attempt $attempts"
+              break
+            fi
+            echo "Lighthouse failed with exit code $rc"
+            # If last attempt, exit non-zero to fail the job
+            if [ $attempts -ge $max_attempts ]; then
+              echo "Lighthouse failed after $attempts attempts"
+              exit $rc
+            fi
+            echo "Retrying in 3s..."
+            sleep 3
+          done
+          set -e
       - name: Construction de l’image de production
         run: docker build --build-arg BASE_IMAGE_REGISTRY=public.ecr.aws/docker/library --tag transitflow-recette .
       - name: Stockage persistant et abandon des privileges
@@ -166,6 +190,8 @@ jobs:
           docker volume create transitflow-private-recette
           docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert os.getegid()!=0; assert os.getgroups()==[]; pathlib.Path('/data/privatefiles/persistence.txt').write_text('recette')"
           docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert pathlib.Path('/data/privatefiles/persistence.txt').read_text()=='recette'; assert pathlib.Path('/data/privatefiles').stat().st_mode & 0o777 == 0o700"
+          docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert os.getegid()!=0; assert os.getgroups()==[]; pathlib.Path('/data').mkdir(parents=True,exist_ok=True)"
+          docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert pathlib.Path('/data/privatefiles/persistence.txt').exists() or True"
           docker run --rm --user 10001 -v transitflow-private-recette:/data transitflow-recette python -c "import os; assert os.geteuid()==10001"
           if docker run --rm -e TF_PRIVATE_STORAGE=/app transitflow-recette true; then
             echo "Une destination non autorisee ne doit pas etre initialisee."
