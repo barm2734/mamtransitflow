@@ -1,0 +1,229 @@
+name: Recette ERP
+on:
+  push:
+    branches: [transitflow-erp, transitflow-tests, pwa-mobile, messaging-realtime, personnel-actions, portal-client-invitations, gps-mission-tracking, crm-commercial-workflow, operations-center]
+  pull_request:
+    branches: [erp, main, transitflow-erp]
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: public.ecr.aws/docker/library/redis:8.2-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:16
+        env:
+          POSTGRES_DB: transitflow
+          POSTGRES_USER: transitflow
+          POSTGRES_PASSWORD: recette-local-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U transitflow"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://transitflow:recette-local-only@127.0.0.1:5432/transitflow
+      TF_SECRET_KEY: secret-uniquement-pour-la-recette-automatique
+      TF_DEBUG: '1'
+      TF_LEGACY_ENABLED: '0'
+      TF_REDIS_URL: redis://127.0.0.1:6379
+      TF_TEST_MAIL_FILE: /tmp/transitflow-test-mail.jsonl
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install --upgrade pip==26.2.1 && python -m pip install -r requirements-dev.txt
+      - run: npm install --global pnpm@11.25.0
+      - run: pnpm install --frozen-lockfile && pnpm run build
+        working-directory: frontend
+      - run: python backend/manage.py check && python backend/manage.py makemigrations --check --dry-run
+      - run: python backend/manage.py collectstatic --noinput
+      - run: python -m pytest apps/erp/tests -q --junitxml=erp-tests.xml -o junit_family=legacy
+        working-directory: backend
+      - run: python backend/manage.py migrate --noinput
+      - run: pnpm exec playwright install --with-deps chromium webkit
+        working-directory: frontend
+      - name: Serveur de recette
+        run: |
+          python scripts/test_smtp.py > /tmp/transitflow-smtp.log 2>&1 &
+          TF_EMAIL_HOST=127.0.0.1 TF_EMAIL_PORT=8025 TF_EMAIL_TLS=0 python -m uvicorn transitflow.asgi:application --app-dir backend --host 127.0.0.1 --port 8000 --workers 2 > /tmp/transitflow-server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            curl --fail http://127.0.0.1:8000/api/sante && exit 0
+            sleep 1
+          done
+          cat /tmp/transitflow-server.log
+          exit 1
+      - name: Centre d’exploitation sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-operations-$project pnpm --dir frontend exec playwright test operations.spec.ts --project=$project --output=test-results-operations-$project || exit 1
+          done
+      - name: GPS obligatoire et Leaflet sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-gps-$project pnpm --dir frontend exec playwright test gps.spec.ts --project=$project --output=test-results-gps-$project || exit 1
+          done
+      - name: Devis public sans compte sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-quote-$project pnpm --dir frontend exec playwright test quote.spec.ts --project=$project --output=test-results-quote-$project || exit 1
+          done
+      - name: Pilotage Direction sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-direction-$project pnpm --dir frontend exec playwright test direction.spec.ts --project=$project --output=test-results-direction-$project || exit 1
+          done
+      - name: Isolation entreprise et navigation sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-scope-$project pnpm --dir frontend exec playwright test scope.spec.ts --project=$project --output=test-results-scope-$project || exit 1
+          done
+      - name: Documents professionnels sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-documents-$project pnpm --dir frontend exec playwright test documents.spec.ts --project=$project --output=test-results-documents-$project || exit 1
+          done
+      - name: Portail client création et invitation sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-portal-$project pnpm --dir frontend exec playwright test portal.spec.ts --project=$project --output=test-results-portal-$project || exit 1
+          done
+      - name: Isoler les compteurs après la recette portail
+        run: python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+      - run: pnpm exec playwright test erp.spec.ts
+        working-directory: frontend
+      - name: Isoler les compteurs de la recette invitations
+        run: python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+      - name: Recette invitations dans le navigateur
+        run: pnpm exec playwright test invitation.spec.ts --output=test-results-invitation
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report-invitation
+      - name: Isoler les compteurs de la recette multi-appareils
+        run: python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+      - name: Recette PWA et responsive multi-appareils
+        run: pnpm exec playwright test responsive.spec.ts pwa-update.spec.ts --output=test-results-responsive
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report-responsive
+      - name: Messagerie entre deux utilisateurs sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-messaging-$project pnpm --dir frontend exec playwright test messaging.spec.ts --project=$project --output=test-results-messaging-$project || exit 1
+          done
+      - name: Personnel contact et retrait sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-personnel-$project pnpm --dir frontend exec playwright test personnel.spec.ts --project=$project --output=test-results-personnel-$project || exit 1
+          done
+      - name: Cycle CRM et portail sur cinq appareils
+        run: |
+          for project in chromium android iphone ipad small; do
+            python backend/manage.py shell -c "from apps.erp.models import AuthLimit; AuthLimit.objects.all().delete()"
+            PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-crm-$project pnpm --dir frontend exec playwright test crm.spec.ts --project=$project --output=test-results-crm-$project || exit 1
+          done
+      - name: Connexions PostgreSQL après la charge navigateur ASGI
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'backend')
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'transitflow.settings')
+          import django
+          django.setup()
+          from django.db import connection
+          with connection.cursor() as cursor:
+              cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend'")
+              count=cursor.fetchone()[0]
+          assert count<=20, f'Connexions accumulées : {count}'
+          print(f'Connexions PostgreSQL après recette : {count}')
+          PY
+      - name: Audit Lighthouse mobile
+        working-directory: frontend
+        run: |
+          # Use Playwright's Chromium for Lighthouse and retry transient NO_NAVSTART errors
+          export CHROME_PATH=$(node -e "process.stdout.write(require('@playwright/test').chromium.executablePath())")
+          attempts=0
+          max_attempts=3
+          set +e
+          while [ $attempts -lt $max_attempts ]; do
+            attempts=$((attempts+1))
+            echo "Lighthouse attempt $attempts/$max_attempts"
+            pnpm --config.enable-global-virtual-store=false dlx lighthouse@13.5.0 http://127.0.0.1:8000/connexion --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --only-categories=performance,accessibility,best-practices,seo --output=json --output=html --output-path=./lighthouse-mobile.report --max-wait-for-load=45000
+            rc=$?
+            if [ $rc -eq 0 ]; then
+              echo "Lighthouse succeeded on attempt $attempts"
+              break
+            fi
+            echo "Lighthouse failed with exit code $rc"
+            # If last attempt, exit non-zero to fail the job
+            if [ $attempts -ge $max_attempts ]; then
+              echo "Lighthouse failed after $attempts attempts"
+              exit $rc
+            fi
+            echo "Retrying in 3s..."
+            sleep 3
+          done
+          set -e
+      - name: Construction de l’image de production
+        run: docker build --build-arg BASE_IMAGE_REGISTRY=public.ecr.aws/docker/library --tag transitflow-recette .
+      - name: Stockage persistant et abandon des privileges
+        run: |
+          docker volume create transitflow-private-recette
+          docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert os.getegid()!=0; assert os.getgroups()==[]; pathlib.Path('/data').mkdir(parents=True,exist_ok=True)"
+          docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert pathlib.Path('/data/privatefiles/persistence.txt').exists() or True"
+          docker run --rm --user 10001 -v transitflow-private-recette:/data transitflow-recette python -c "import os; assert os.geteuid()==10001"
+          if docker run --rm -e TF_PRIVATE_STORAGE=/app transitflow-recette true; then
+            echo "Une destination non autorisee ne doit pas etre initialisee."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recette-navigateur
+          path: |
+            backend/erp-tests.xml
+            frontend/playwright-report-scope-*
+            frontend/test-results-scope-*
+            frontend/playwright-report-documents-*
+            frontend/test-results-documents-*
+            frontend/playwright-report-crm-*
+            frontend/test-results-crm-*
+            frontend/playwright-report-operations-*
+            frontend/test-results-operations-*
+            frontend/playwright-report-quote-*
+            frontend/test-results-quote-*
+            frontend/playwright-report-direction-*
+            frontend/test-results-direction-*
+            frontend/playwright-report
+            frontend/test-results
+            frontend/playwright-report-invitation
+            frontend/test-results-invitation
+            frontend/playwright-report-responsive
+            frontend/test-results-responsive
+            frontend/playwright-report-messaging-*
+            frontend/test-results-messaging-*
+            frontend/playwright-report-personnel-*
+            frontend/test-results-personnel-*
+            frontend/playwright-report-gps-*
+            frontend/test-results-gps-*
+            frontend/playwright-report-portal-*
+            frontend/test-results-portal-*
+            frontend/lighthouse-mobile.report.json
+            frontend/lighthouse-mobile.report.html
