@@ -157,6 +157,8 @@ jobs:
       - name: Audit Lighthouse mobile
         working-directory: frontend
         run: |
+          export CHROME_PATH=$(node -e "process.stdout.write(require('@playwright/test').chromium.executablePath())")
+          pnpm --config.enable-global-virtual-store=false dlx lighthouse@13.5.0 http://127.0.0.1:8000/connexion --chrome-flags="--headless --no-sandbox" --only-categories=performance,accessibility,best-practices --output=json --output=html --output-path=lighthouse-mobile --quiet
           # Use Playwright's Chromium for Lighthouse and retry transient NO_NAVSTART errors
           export CHROME_PATH=$(node -e "process.stdout.write(require('@playwright/test').chromium.executablePath())")
           attempts=0
@@ -186,6 +188,8 @@ jobs:
       - name: Stockage persistant et abandon des privileges
         run: |
           docker volume create transitflow-private-recette
+          docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert os.getegid()!=0; assert os.getgroups()==[]; pathlib.Path('/data/privatefiles/persistence.txt').write_text('recette')"
+          docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert pathlib.Path('/data/privatefiles/persistence.txt').read_text()=='recette'; assert pathlib.Path('/data/privatefiles').stat().st_mode & 0o777 == 0o700"
           docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert os.getegid()!=0; assert os.getgroups()==[]; pathlib.Path('/data').mkdir(parents=True,exist_ok=True)"
           docker run --rm -v transitflow-private-recette:/data transitflow-recette python -c "import os,pathlib; assert os.geteuid()==10001; assert pathlib.Path('/data/privatefiles/persistence.txt').exists() or True"
           docker run --rm --user 10001 -v transitflow-private-recette:/data transitflow-recette python -c "import os; assert os.geteuid()==10001"

@@ -1,3 +1,6 @@
+# La liste des dependances est tenue dans requirements.txt a la racine
+# (voir le commentaire de ce fichier).
+-r ../requirements.txt
 Django>=5.2,<5.3
 djangorestframework>=3.15
 djangorestframework-simplejwt>=5.3

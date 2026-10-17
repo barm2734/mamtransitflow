@@ -1,0 +1,11 @@
+"""Auteur : Jonathan Kakesa (JonathanK-N)."""
+from django.apps import AppConfig
+
+
+class ErpConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.erp'
+    verbose_name = 'ERP multi-entreprise'
+
+    def ready(self):
+        from . import chat_signals,operations_signals

@@ -81,6 +81,16 @@ a:hover { color: var(--tf-accent-deep); }
   font-weight: 500;
 }
 .tf-navbar-user { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 14px; }
+/* Les libelles ne se coupent jamais sur deux lignes : sur un ecran etroit,
+   la barre defile horizontalement plutot que de se deformer. */
+.tf-navbar { overflow-x: auto; scrollbar-width: none; }
+.tf-navbar::-webkit-scrollbar { display: none; }
+.tf-nav-link, .tf-brand, .tf-navbar-user, .tf-navbar-user > * { white-space: nowrap; flex: none; }
+@media (max-width: 1280px) {
+  .tf-navbar { padding: 0 18px; gap: 4px; }
+  .tf-nav-link { padding: 8px 11px; font-size: 13.5px; }
+  .tf-brand { margin-right: 12px; }
+}
 
 /* Surfaces */
 .tf-page { padding: 28px; display: flex; flex-direction: column; gap: 18px; }
@@ -307,13 +317,15 @@ textarea.tf-input { height: auto; min-height: 84px; padding: 13px 16px; line-hei
 .tf-login-title { font-size: 38px; font-weight: 500; line-height: 1.18; letter-spacing: -.025em; }
 .tf-login-sub { font-size: 15.5px; line-height: 1.6; color: var(--tf-on-dark-muted); max-width: 330px; }
 .tf-login-main { display: flex; align-items: center; justify-content: center; padding: 48px; }
-.tf-login-form { width: 378px; display: flex; flex-direction: column; gap: 20px; }
+.tf-login-form { width: 378px; max-width: 100%; display: flex; flex-direction: column; gap: 20px; }
 
 @media (max-width: 900px) {
-  .tf-login { grid-template-columns: 1fr; }
+  .tf-login { grid-template-columns: minmax(0, 1fr); }
   .tf-login-aside { display: none; }
+  .tf-login-main { padding: 32px 16px; }
   .tf-page { padding: 18px; }
   .tf-navbar { padding: 0 14px; overflow-x: auto; }
+  .tf-nav-link, .tf-brand { white-space: nowrap; flex: none; }
 }
 
 /* Modale */
@@ -339,3 +351,185 @@ textarea.tf-input { height: auto; min-height: 84px; padding: 13px 16px; line-hei
   font-size: 15px; cursor: pointer;
 }
 .tf-hidden { display: none !important; }
+
+/* Notifications (erreurs du serveur, confirmations) — voir tfNotifier dans store.js */
+.tf-toasts {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+  width: max-content; max-width: calc(100vw - 32px);
+  z-index: 60;
+}
+.tf-toast {
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  box-shadow: 0 12px 30px rgba(42, 37, 33, .25);
+  background: var(--tf-danger); color: #fff;
+}
+.tf-toast.succes { background: var(--tf-ok); }
+
+/* ---- Flotte et entretien ------------------------------------------------ */
+.tf-pill.muted { background: transparent; border: 1px solid var(--tf-border); color: var(--tf-muted); }
+select.tf-input {
+  appearance: none;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%236F6860' stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+}
+.tf-input.sm { height: 40px; font-size: 14px; padding: 0 12px; }
+select.tf-input.sm { padding-right: 34px; background-position: right 12px center; }
+.tf-btn.sm { height: 36px; padding: 0 14px; font-size: 13px; }
+.tf-btn:disabled { opacity: .55; cursor: not-allowed; }
+.tf-btn-danger { background: #fff; border-color: #EBC5C0; color: var(--tf-danger); }
+.tf-btn-danger:hover { background: var(--tf-danger-tint); color: var(--tf-danger); }
+.tf-table-scroll { overflow-x: auto; border-radius: var(--tf-radius); }
+.tf-table-scroll .tf-table { min-width: 720px; }
+.tf-table td.tf-mono, .tf-table td .tf-mono { white-space: nowrap; }
+.tf-table tbody tr[data-ligne] { cursor: pointer; }
+.tf-table tbody tr[data-ligne]:hover { background: #FFFCF8; }
+
+/* Onglets */
+.tf-tabs { display: flex; gap: 26px; padding: 0 22px; border-bottom: 1px solid var(--tf-line); overflow-x: auto; }
+.tf-tab {
+  border: none; background: none;
+  padding: 16px 0 13px;
+  font-family: inherit; font-size: 14.5px; color: var(--tf-muted);
+  border-bottom: 2.5px solid transparent;
+  white-space: nowrap; cursor: pointer;
+}
+.tf-tab.active { color: var(--tf-ink); font-weight: 500; border-bottom-color: var(--tf-accent); }
+.tf-tab .tf-mono { font-size: 12.5px; }
+
+/* Barres horizontales (couts par type) */
+.tf-bars { display: flex; flex-direction: column; gap: 12px; }
+.tf-bar-row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr auto; gap: 14px; align-items: center; font-size: 13.5px; }
+.tf-bar { height: 10px; border-radius: 999px; background: var(--tf-line); overflow: hidden; }
+.tf-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--tf-accent); }
+
+/* Grille de proprietes (fiche vehicule, detail d un bon) */
+.tf-props { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px; }
+.tf-props > div > .tf-meta { margin-bottom: 4px; }
+.tf-props-value { font-size: 14.5px; }
+
+.tf-form-error {
+  padding: 11px 14px; border-radius: var(--tf-radius-sm);
+  background: var(--tf-danger-tint); color: var(--tf-danger); font-size: 13.5px;
+}
+.tf-empty { padding: 26px 22px; color: var(--tf-muted); font-size: 14px; }
+
+@media (max-width: 900px) {
+  .tf-bar-row { grid-template-columns: 110px 1fr auto; gap: 10px; }
+  .tf-modal { padding: 22px; }
+}
+
+/* ---- Suivi GPS (Leaflet) ------------------------------------------------ */
+.tf-carte { width: 100%; border-radius: var(--tf-radius-sm); overflow: hidden; background: #EDE7DF; z-index: 0; }
+.tf-carte-plein { height: calc(100vh - 230px); min-height: 440px; }
+.leaflet-container { font-family: var(--tf-font); }
+.leaflet-popup-content { font-size: 13.5px; line-height: 1.5; margin: 12px 14px; }
+.tf-marqueur { position: relative; width: 0; height: 0; }
+.tf-marqueur-point {
+  position: absolute; left: -9px; top: -9px;
+  width: 18px; height: 18px; border-radius: 999px;
+  background: var(--tf-ok); border: 3px solid #fff;
+  box-shadow: 0 1px 6px rgba(42, 37, 33, .45);
+}
+.tf-marqueur.intermittent .tf-marqueur-point { background: var(--tf-accent); }
+.tf-marqueur.perdue .tf-marqueur-point { background: #9A928A; }
+.tf-marqueur.selection .tf-marqueur-point { box-shadow: 0 0 0 4px rgba(217, 112, 47, .35), 0 1px 6px rgba(42, 37, 33, .45); }
+.tf-marqueur-cap {
+  position: absolute; left: -6px; top: -21px; width: 12px; height: 12px;
+  transform-origin: 6px 21px;
+}
+.tf-marqueur-cap::before {
+  content: ""; position: absolute; left: 1px; top: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--tf-dark);
+}
+.tf-marqueur-etiquette {
+  position: absolute; left: 14px; top: -12px;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--tf-dark); color: #fff;
+  font-family: var(--tf-mono); font-size: 11.5px; white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(42, 37, 33, .3);
+}
+.tf-marqueur-borne {
+  width: 14px; height: 14px; border-radius: 999px; border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(42, 37, 33, .4); margin: -7px 0 0 -7px;
+}
+.tf-marqueur-borne.depart { background: var(--tf-ok); }
+.tf-marqueur-borne.arrivee { background: var(--tf-dark); }
+.tf-liste-suivi { display: flex; flex-direction: column; }
+.tf-liste-suivi button {
+  display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left;
+  padding: 14px 18px; border: none; border-top: 1px solid var(--tf-line); background: #fff;
+  font-family: inherit; cursor: pointer;
+}
+.tf-liste-suivi button:hover { background: #FFFCF8; }
+.tf-liste-suivi button.active { background: #FFF9F4; box-shadow: inset 3px 0 0 var(--tf-accent); }
+.tf-voyant { width: 10px; height: 10px; border-radius: 999px; background: var(--tf-ok); flex: none; margin-top: 6px; }
+.tf-voyant.intermittent { background: var(--tf-accent); }
+.tf-voyant.perdue, .tf-voyant.aucune { background: #B8B0A7; }
+.tf-voyant.en-ligne { box-shadow: 0 0 0 4px rgba(47, 107, 84, .15); }
+
+/* ---- Navigation generee (auth.js) : nom de l entreprise sous la marque ---- */
+.tf-nav-entreprise {
+  flex: none; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12.5px; color: var(--tf-on-dark-muted); margin: 0 14px 0 -4px; padding-left: 12px;
+  border-left: 1px solid #4A423B;
+}
+@media (max-width: 1280px) { .tf-nav-entreprise { display: none; } }
+.tf-link { color: var(--tf-accent-deep); text-decoration: none; font-weight: 500; }
+.tf-link:hover { text-decoration: underline; }
+.tf-check { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; font-size: 14.5px; line-height: 1.45; }
+.tf-check input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--tf-accent); flex: none; }
+.tf-copie { display: flex; gap: 10px; flex-wrap: wrap; }
+.tf-copie .tf-input { flex: 1 1 320px; font-size: 13px; }
+
+/* ---- Parametres, applications, portail, paie ------------------------------- */
+.tf-alerte { background: var(--tf-accent-tint); color: var(--tf-accent-deep); border-radius: 12px; padding: 14px 16px;
+  font-size: 13.5px; line-height: 1.55; }
+.tf-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.tf-app { border: 1px solid var(--tf-line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column;
+  gap: 10px; background: #fff; }
+.tf-app.inactive { background: var(--tf-bg); }
+.tf-app-icone { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
+  font-size: 19px; background: var(--tf-accent-tint); }
+.tf-app.inactive .tf-app-icone { filter: grayscale(1); opacity: .6; }
+.tf-reglage { display: flex; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--tf-line); }
+.tf-reglage:last-child { border-bottom: none; }
+.tf-switch { position: relative; width: 44px; height: 26px; flex: none; }
+.tf-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.tf-switch span { position: absolute; inset: 0; background: #D9D2CA; border-radius: 26px; cursor: pointer; transition: .2s; }
+.tf-switch span::before { content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff;
+  border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.tf-switch input:checked + span { background: var(--tf-accent); }
+.tf-switch input:checked + span::before { transform: translateX(18px); }
+.tf-switch input:disabled + span { opacity: .45; cursor: not-allowed; }
+.tf-switch input:focus-visible + span { outline: 2px solid var(--tf-accent); outline-offset: 2px; }
+.tf-lien-suppr { border: none; background: none; color: var(--tf-muted); font-size: 13px; padding: 2px 6px; border-radius: 6px; }
+.tf-lien-suppr:hover { color: var(--tf-danger); background: var(--tf-danger-tint); }
+
+.tf-bulletin { padding: 28px; display: flex; flex-direction: column; gap: 20px; max-width: 900px; }
+.tf-bulletin-employeur { font-size: 18px; font-weight: 600; }
+.tf-bulletin-infos { font-size: 14px; padding: 14px 0; border-top: 1px solid var(--tf-line); border-bottom: 1px solid var(--tf-line); }
+.tf-bulletin-table tbody td { padding-top: 9px; padding-bottom: 9px; font-size: 14px; }
+.tf-bulletin-section td { font-weight: 600; font-size: 12.5px !important; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--tf-muted); background: var(--tf-bg); }
+.tf-bulletin-totaux { margin-left: auto; width: min(100%, 360px); display: flex; flex-direction: column; gap: 8px; }
+.tf-bulletin-totaux > div { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; }
+.tf-bulletin-totaux .net { font-size: 18px; font-weight: 600; padding-top: 10px; border-top: 2px solid var(--tf-ink); }
+
+@media print {
+  .tf-navbar, .tf-no-print, .tf-toasts, .tf-modal-backdrop { display: none !important; }
+  body { background: #fff !important; }
+  .tf-page { padding: 0 !important; }
+  .tf-bulletin { box-shadow: none !important; max-width: none; padding: 0; }
+  [data-bulletin] { display: block !important; }
+}
+/* Liste empilee (portail chauffeur) : lisible sur telephone, sans defilement horizontal. */
+.tf-liste { list-style: none; margin: 0; padding: 6px 0 4px; }
+.tf-liste li { display: flex; align-items: center; gap: 12px; padding: 13px 22px; border-top: 1px solid var(--tf-line);
+  font-size: 14.5px; }
+.tf-liste li:first-child { border-top: none; }
+@media (max-width: 600px) { .tf-navbar-user > span:nth-child(2) { display: none; } }

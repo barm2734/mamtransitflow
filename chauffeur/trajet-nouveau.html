@@ -13,10 +13,7 @@
 </head>
 <body data-page="trajet-nouveau">
 <nav class="tf-navbar">
-  <a class="tf-brand" href="mes-trajets.html">Transit<span>Flow</span></a>
-  <a class="tf-nav-link" href="mes-trajets.html">Mes trajets</a>
-  <a class="tf-nav-link active" href="trajet-nouveau.html">Nouveau trajet</a>
-  <a class="tf-nav-link" href="incident-nouveau.html">Signaler un incident</a>
+  <a class="tf-brand" href="#">Transit<span>Flow</span></a>
   <div class="tf-navbar-user" data-navbar-user></div>
 </nav>
 <main class="tf-page">
@@ -31,7 +28,7 @@
     </div>
   </div>
 
-  <form class="tf-card tf-card-pad d-flex flex-column gap-4" data-formulaire>
+  <form method="post" class="tf-card tf-card-pad d-flex flex-column gap-4" data-formulaire>
     <div>
       <h2 class="tf-h3 mb-3">Quel vehicule prenez-vous ?</h2>
       <div class="row g-3" data-vehicules></div>
@@ -51,10 +48,10 @@
           <input class="tf-input" name="arrivee" placeholder="Trois-Rivieres" required></label></div>
         <div class="col-6 col-md-4"><label class="tf-field">
           <span class="tf-label">Heure de depart</span>
-          <input class="tf-input" name="heure" type="time" value="07:40" required></label></div>
+          <input class="tf-input" name="heure" type="time" required></label></div>
         <div class="col-6 col-md-4"><label class="tf-field">
           <span class="tf-label">Arrivee prevue</span>
-          <input class="tf-input" name="heurePrevue" type="time" value="09:50" required></label></div>
+          <input class="tf-input" name="heurePrevue" type="time" required></label></div>
       </div>
     </div>
 
@@ -68,6 +65,7 @@
 <script src="../assets/js/store.js"></script>
 <script src="../assets/js/format.js"></script>
 <script src="../assets/js/auth.js"></script>
+<script src="../assets/js/ui.js"></script>
 <script src="../assets/js/chauffeur.js"></script>
 </body>
 </html>
